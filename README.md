@@ -86,4 +86,7 @@ static/
 
 ## License
 
-See repo.
+Licensed under the [Apache License 2.0](LICENSE). Free to use, study, modify, and
+build on — including commercially — provided you keep the license and attribution.
+
+Source code: https://github.com/Roupen92/AI-for-cancer-patients
