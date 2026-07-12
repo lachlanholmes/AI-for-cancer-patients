@@ -10,7 +10,7 @@ app works the same way.
 | Item | Cost | Notes |
 |------|------|-------|
 | Railway Hobby plan | **$5/mo** | The subscription includes $5 of resource-usage credit. A small always-on service with no DB should stay within it. |
-| Gemini API | **$0 – a few $/mo** | Free tier works for light personal use but is rate-limited hard (see below). `gemini-2.5-flash` on the paid tier is cheap. |
+| Gemini API | **a few $/mo** | A **paid (billing-enabled) Google Cloud project is required** — the free tier is effectively 0 requests/min for this app's fan-out. `gemini-3.5-flash` on the paid tier is cheap. |
 | Brave Search API | **Deferred** | Brave no longer has a free tier ($20 minimum prepayment). The app runs **without** it — see [Running without Brave](#running-without-brave). |
 | PubMed / Europe PMC / Semantic Scholar | **$0** | No key required. |
 
@@ -32,12 +32,12 @@ is strictly required.
 
 | Variable | Required? | Value |
 |----------|-----------|-------|
-| `GEMINI_API_KEY` | **Yes** | Your Google AI Studio key. The provider auto-resolves to Gemini when this is set. |
+| `GEMINI_API_KEY` | **Yes** | Your Google AI Studio key, from a **billing-enabled** project. The provider auto-resolves to Gemini when this is set. |
 | `CANCERPATIENT_ALLOWED_ORIGINS` | Recommended | Your Railway public URL, e.g. `https://your-app.up.railway.app`. Enables CORS; leave unset to disable cross-origin requests. |
 | `CANCERPATIENT_MAX_ACTIVE_SESSIONS` | Recommended | Caps concurrent runs to bound spend. Default `20`; `10` is a safe starting point. |
 | `CANCERPATIENT_REASONING_EFFORT` | Recommended | `none` \| `low` \| `medium` \| `high`. **Biggest cost/latency lever.** Defaults to `high`; set `low` to cut output tokens and speed things up. |
 | `Brave_API` | Optional (deferred) | Brave Search key. Case matters. Omit to run without web search — see below. |
-| `CANCERPATIENT_MODEL` | Optional | Override the model. Default `gemini-2.5-flash`. |
+| `CANCERPATIENT_MODEL` | Optional | Override the model. Default `gemini-3.5-flash` (`gemini-2.5-flash` is retired for new projects). |
 | `CANCERPATIENT_PROVIDER` + `OPENAI_API_KEY` | Optional | Switch to OpenAI instead of Gemini. |
 | `NCBI_EMAIL` + `NCBI_API_KEY` | Optional | Raises the PubMed rate limit. |
 
@@ -64,14 +64,18 @@ is strictly required.
 - **`CANCERPATIENT_REASONING_EFFORT=low`** roughly cuts the expensive output-token
   cost and latency of every model call.
 
-### A note on Gemini rate limits
+### A note on Gemini: paid tier is required
 
-A single patient query launches 6 specialists in parallel, each making several
-tool-calling LLM calls, plus a synthesizer and translator — easily 20–40+ Gemini
-calls per query. The free tier (~10 requests/min, a few hundred/day for
-`gemini-2.5-flash`) throttles this hard: expect slow, occasionally failing runs and
-only a handful of full queries per day. For a genuinely usable deployment, enable
-Gemini's paid tier — `gemini-2.5-flash` is inexpensive at personal volume.
+A single patient query launches up to 6 specialists in parallel, each making
+several tool-calling LLM calls, plus a synthesizer and translator — commonly ~30
+Gemini calls per query. The **free tier cannot serve this** (in practice 429/quota
+errors on even a single call for new projects). Enable billing on the key's Google
+Cloud project (Tier 1). `gemini-3.5-flash` is inexpensive — a full query with
+`CANCERPATIENT_REASONING_EFFORT=low` is roughly a few cents. Set a **budget alert**
+in Google Cloud as a spend guard.
+
+Latency note: a full query takes ~3–5 minutes (parallel specialists each doing
+multiple search + LLM rounds). That is expected, not a hang.
 
 ## Running without Brave
 
