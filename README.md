@@ -59,6 +59,8 @@ Then open http://localhost:8000.
 ## Deploy
 
 `railpack.json` and `Procfile` are configured for Railway. Same shape as the Tumor Board.
+See [DEPLOY.md](DEPLOY.md) for a full step-by-step Railway runbook, environment
+variables, cost controls, and how to run without a Brave key.
 
 ## File map
 
