@@ -16,7 +16,7 @@ import time
 from openai import OpenAI, APIConnectionError, APIStatusError, RateLimitError
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-JUDGE_MODEL = os.getenv("CANCERPATIENT_JUDGE_MODEL", "gemini-3-pro-preview")
+JUDGE_MODEL = os.getenv("CANCERPATIENT_JUDGE_MODEL", "gemini-3-flash-preview")
 
 _client: OpenAI | None = None
 

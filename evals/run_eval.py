@@ -90,8 +90,24 @@ def _run_one(case: dict) -> dict:
     )
     wall = time.perf_counter() - t0
     usage = _snapshot_usage()
+    md = result.get("english_markdown", "") or ""
+
+    # Flag runs wrecked by upstream failures (e.g. a provider 503 storm) so they
+    # can be EXCLUDED from A/B averages instead of silently poisoning them.
+    error_specialists = sorted(k for k, v in statuses.items() if v == "error")
+    synth_failed = md.lstrip().startswith(("## Something went wrong", "## We couldn't finish"))
+    no_output = usage["calls"] == 0
+    degraded = bool(error_specialists) or synth_failed or no_output
+    reasons = []
+    if error_specialists:
+        reasons.append(f"specialist errors: {', '.join(error_specialists)}")
+    if synth_failed:
+        reasons.append("synthesizer failed")
+    if no_output:
+        reasons.append("no LLM calls completed")
+
     return {
-        "english_markdown": result.get("english_markdown", ""),
+        "english_markdown": md,
         "translated_markdown": result.get("translated_markdown", ""),
         "references": result.get("references", []),
         "timing": result.get("timing", {}),
@@ -99,6 +115,8 @@ def _run_one(case: dict) -> dict:
         "usage": usage,
         "wall_s": round(wall, 1),
         "metrics": metrics.compute(result, statuses),
+        "degraded": degraded,
+        "degraded_reason": "; ".join(reasons),
     }
 
 
@@ -147,6 +165,15 @@ def main() -> None:
                 f"llm_calls={u['calls']} wall={rec['wall_s']}s",
                 flush=True,
             )
+            if rec["degraded"]:
+                print(f"      ⚠️  DEGRADED — {rec['degraded_reason']} (will be excluded from A/B)", flush=True)
+
+    n_degraded = sum(1 for r in runs if r["degraded"])
+    if n_degraded:
+        print(
+            f"\n⚠️  {n_degraded}/{len(runs)} runs were DEGRADED (likely a provider outage). "
+            f"Consider re-running once the model is healthy — compare.py excludes them."
+        )
 
     out_path = Path(args.out) if args.out else Path(__file__).parent / "results" / f"{args.label}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)

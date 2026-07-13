@@ -46,7 +46,20 @@ def _cost_per_query(model: str, in_tok: float, out_tok: float):
 
 
 def _aggregate(data: dict) -> dict:
-    runs = data["runs"]
+    all_runs = data["runs"]
+    # Exclude degraded runs (provider outages etc.) so they don't skew averages.
+    runs = [r for r in all_runs if not r.get("degraded")]
+    n_degraded = len(all_runs) - len(runs)
+    if not runs:  # everything degraded — nothing trustworthy to average
+        return {
+            "label": data["config"]["label"],
+            "model": data["config"]["model"],
+            "reasoning_effort": data["config"].get("reasoning_effort", "?"),
+            "max_tool_iterations": data["config"].get("max_tool_iterations", "?"),
+            "degraded_runs": n_degraded,
+            "total_runs": len(all_runs),
+            "all_degraded": True,
+        }
     model = data["config"]["model"]
     in_tok = _mean([r["usage"]["prompt_tokens"] for r in runs])
     out_tok = _mean([r["usage"]["completion_tokens"] for r in runs])
@@ -67,6 +80,9 @@ def _aggregate(data: dict) -> dict:
         "safety_framing_rate": _mean([1 if r["metrics"]["has_safety_framing"] else 0 for r in runs]),
         "avg_abstentions": _mean([r["metrics"]["abstentions"] for r in runs]),
         "avg_wall_s": _mean([r["wall_s"] for r in runs]),
+        "degraded_runs": n_degraded,
+        "total_runs": len(all_runs),
+        "all_degraded": False,
     }
 
 
@@ -83,6 +99,7 @@ def _metric_rows(agg_a: dict, agg_b: dict) -> str:
         ("Model", "model"),
         ("Reasoning effort", "reasoning_effort"),
         ("Tool iterations cap", "max_tool_iterations"),
+        ("Degraded / total runs", "_degraded"),
         ("Est. $ / query", "est_cost_per_query"),
         ("Avg prompt tokens", "avg_prompt_tokens"),
         ("Avg completion tokens", "avg_completion_tokens"),
@@ -95,15 +112,22 @@ def _metric_rows(agg_a: dict, agg_b: dict) -> str:
         ("Avg abstentions", "avg_abstentions"),
         ("Avg wall time (s)", "avg_wall_s"),
     ]
+
+    def _cell(agg, key):
+        if key == "_degraded":
+            return f"{agg.get('degraded_runs', 0)} / {agg.get('total_runs', 0)}"
+        if agg.get("all_degraded"):
+            return "—"
+        v = agg.get(key)
+        if key == "est_cost_per_query":
+            return _fmt_cost(v)
+        return "—" if v is None else str(v)
+
     out = []
     for label, key in rows:
-        av = agg_a.get(key)
-        bv = agg_b.get(key)
-        if key == "est_cost_per_query":
-            av, bv = _fmt_cost(av), _fmt_cost(bv)
         out.append(
-            f"<tr><td>{html.escape(label)}</td><td>{html.escape(str(av))}</td>"
-            f"<td>{html.escape(str(bv))}</td></tr>"
+            f"<tr><td>{html.escape(label)}</td><td>{html.escape(_cell(agg_a, key))}</td>"
+            f"<td>{html.escape(_cell(agg_b, key))}</td></tr>"
         )
     return "\n".join(out)
 
@@ -123,10 +147,15 @@ def build_report(data_a: dict, data_b: dict, *, do_judge: bool, seed: int) -> st
     js_cases = []
     win_a = win_b = win_tie = 0
 
+    n_deg_cases = 0
     for case_id in [c for c in by_a if c in by_b]:
-        run_a = by_a[case_id][0]  # representative run (index 0)
-        run_b = by_b[case_id][0]
+        # Prefer a healthy run for the side-by-side; fall back to run 0.
+        run_a = next((r for r in by_a[case_id] if not r.get("degraded")), by_a[case_id][0])
+        run_b = next((r for r in by_b[case_id] if not r.get("degraded")), by_b[case_id][0])
         case_text = run_a["case"]
+        case_degraded = run_a.get("degraded") or run_b.get("degraded")
+        if case_degraded:
+            n_deg_cases += 1
 
         # Blind: randomly assign A/B to left/right, deterministically per case.
         rng = random.Random(f"{seed}:{case_id}")
@@ -136,7 +165,7 @@ def build_report(data_a: dict, data_b: dict, *, do_judge: bool, seed: int) -> st
 
         judge_winner_label = ""
         judge_reason = ""
-        if do_judge:
+        if do_judge and not case_degraded:
             # Judge is blind too: it sees "A"=left, "B"=right.
             verdict = judge.pairwise(case_text, left_run["english_markdown"], right_run["english_markdown"])
             w = str(verdict.get("winner", "tie")).upper()
@@ -169,17 +198,30 @@ def build_report(data_a: dict, data_b: dict, *, do_judge: bool, seed: int) -> st
             f"<p class='mini'>Output 1: {html.escape(_mini(left_run))}</p>"
             f"<p class='mini'>Output 2: {html.escape(_mini(right_run))}</p>"
         )
-        if do_judge:
+        if do_judge and judge_winner_label:
             reveal += (
                 f"<p class='judge'>⚖️ Judge picked: <b>{html.escape(judge_winner_label)}</b>"
                 f" — {html.escape(judge_reason)}</p>"
             )
         reveal += "</div>"
 
+        badge = ""
+        if case_degraded:
+            deg_bits = []
+            if run_a.get("degraded"):
+                deg_bits.append(f"{html.escape(label_a)}: {html.escape(run_a.get('degraded_reason', ''))}")
+            if run_b.get("degraded"):
+                deg_bits.append(f"{html.escape(label_b)}: {html.escape(run_b.get('degraded_reason', ''))}")
+            badge = (
+                "<div class='degraded'>⚠️ Degraded run (provider failure) — not judged; "
+                "excluded from averages. " + " · ".join(deg_bits) + "</div>"
+            )
+
         case_blocks.append(
             f"""
 <section class="case" data-case="{html.escape(case_id)}">
   <h2>{html.escape(case_id)}</h2>
+  {badge}
   <div class="case-text">{html.escape(case_text)}
     <div class="loc">{html.escape(run_a['location'] or '(no location)')} · {html.escape(run_a['target_language'])}</div>
   </div>
@@ -203,8 +245,17 @@ def build_report(data_a: dict, data_b: dict, *, do_judge: bool, seed: int) -> st
     judge_summary = ""
     if do_judge:
         judge_summary = (
-            f"<p class='jtally'>LLM judge across {win_a + win_b + win_tie} cases: "
+            f"<p class='jtally'>LLM judge across {win_a + win_b + win_tie} judged cases: "
             f"<b>{html.escape(label_a)}</b> {win_a} · <b>{html.escape(label_b)}</b> {win_b} · tie {win_tie}</p>"
+        )
+
+    degraded_banner = ""
+    total_deg = (agg_a.get("degraded_runs", 0) or 0) + (agg_b.get("degraded_runs", 0) or 0)
+    if total_deg or n_deg_cases:
+        degraded_banner = (
+            f"<div class='degraded-banner'>⚠️ {total_deg} degraded run(s) across the two configs "
+            f"(likely a provider outage). {n_deg_cases} case(s) shown but not judged, and degraded "
+            f"runs are excluded from the averages above. Re-run those configs once the model is healthy.</div>"
         )
 
     return _HTML_TEMPLATE.format(
@@ -212,6 +263,7 @@ def build_report(data_a: dict, data_b: dict, *, do_judge: bool, seed: int) -> st
         label_b=html.escape(label_b),
         metric_rows=_metric_rows(agg_a, agg_b),
         judge_summary=judge_summary,
+        degraded_banner=degraded_banner,
         cases="\n".join(case_blocks),
         js_cases=json.dumps(js_cases),
         label_a_js=json.dumps(label_a),
@@ -251,6 +303,8 @@ _HTML_TEMPLATE = """<!doctype html>
   .mini {{ color:#555; margin:3px 0; font-family:ui-monospace,monospace; font-size:12px; }}
   .judge {{ margin-top:6px; }}
   .agree {{ font-weight:600; }}
+  .degraded-banner {{ background:#fff4e5; border:1px solid #f0c27a; color:#7a4a00; padding:12px 16px; border-radius:6px; margin:0 0 16px; font-size:14px; }}
+  .degraded {{ background:#fff4e5; border:1px solid #f0c27a; color:#7a4a00; padding:8px 12px; border-radius:6px; margin-bottom:12px; font-size:13px; }}
 </style></head>
 <body>
 <header>
@@ -258,6 +312,7 @@ _HTML_TEMPLATE = """<!doctype html>
   <div>Judge each case blind (Output 1 vs 2), then <b>Reveal</b>. Your picks are saved locally.</div>
 </header>
 <div class="wrap">
+  {degraded_banner}
   <table class="summary"><tr><th>Metric</th><th>{label_a}</th><th>{label_b}</th></tr>
   {metric_rows}
   </table>
