@@ -88,6 +88,21 @@
     } catch (e) { /* ignore */ }
   }
 
+  // Wipe the form inputs and their autosaved copy. Used by both "Start over"
+  // buttons (on the form and on the results screen) so no prior patient's text
+  // can linger in the textarea on a shared device. "Adjust and ask again"
+  // deliberately does NOT call this — it preserves the text for editing.
+  function clearForm() {
+    caseInput.value = "";
+    $("#location").value = "";
+    $("#preferences").value = "";
+    $("#target_language").value = "English";
+    $("#ack").checked = false;
+    caseInput.setAttribute("aria-invalid", "false");
+    caseError.textContent = "";
+    sessionStorage.removeItem("cs-form");
+  }
+
   caseInput.addEventListener("input", () => {
     if (caseInput.getAttribute("aria-invalid") === "true") {
       caseInput.setAttribute("aria-invalid", "false");
@@ -157,14 +172,7 @@
   });
 
   $("#reset-btn").addEventListener("click", () => {
-    caseInput.value = "";
-    $("#location").value = "";
-    $("#preferences").value = "";
-    $("#target_language").value = "English";
-    $("#ack").checked = false;
-    caseInput.setAttribute("aria-invalid", "false");
-    caseError.textContent = "";
-    sessionStorage.removeItem("cs-form");
+    clearForm();
     caseInput.focus();
   });
 
@@ -177,9 +185,20 @@
     showView("form");
   });
 
+  // "Adjust and ask again" — keep the patient's text so they can tweak it
+  // (add detail, narrow it, or just change the target language) without retyping.
   $("#restart-btn").addEventListener("click", () => {
     resetState();
     showView("form");
+    caseInput.focus();
+  });
+
+  // "Start over" on the results screen — a full wipe from where the text is shown.
+  $("#result-reset-btn").addEventListener("click", () => {
+    clearForm();
+    resetState();
+    showView("form");
+    caseInput.focus();
   });
 
   $("#print-btn").addEventListener("click", () => window.print());
