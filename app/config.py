@@ -52,7 +52,9 @@ MODEL_NAME = (
 # Single round of parallel specialists; no judge, no consensus loop.
 SINGLE_ROUND = True
 PARALLEL_SPECIALISTS = 5
-MAX_TOOL_ITERATIONS = 5
+# Tool-call budget per specialist. Lower = cheaper/faster, fewer search rounds.
+# Env-tunable so cost/quality can be A/B-tested (see evals/).
+MAX_TOOL_ITERATIONS = int(os.getenv("CANCERPATIENT_MAX_TOOL_ITERATIONS", "5"))
 
 
 # Tools available to every research agent. The translator gets none.
@@ -316,12 +318,24 @@ SPECIALIST_CONFIGS: dict[str, dict] = {
 }
 
 
+def _disabled_specialists() -> set[str]:
+    """Specialist ids to skip entirely, from CANCERPATIENT_DISABLED_SPECIALISTS
+    (comma-separated). Lets cost/quality be A/B-tested by dropping helpers."""
+    raw = (os.getenv("CANCERPATIENT_DISABLED_SPECIALISTS") or "").strip()
+    return {s.strip() for s in raw.split(",") if s.strip()}
+
+
 def researcher_ids() -> list[str]:
-    """All specialists that participate in the parallel research round."""
+    """All specialists that participate in the parallel research round.
+
+    Honors CANCERPATIENT_DISABLED_SPECIALISTS so specific helpers can be turned
+    off (e.g. to cut per-query cost). Defaults to all researchers when unset.
+    """
+    disabled = _disabled_specialists()
     return [
         sid
         for sid, cfg in SPECIALIST_CONFIGS.items()
-        if cfg.get("role") != "post_synthesis"
+        if cfg.get("role") != "post_synthesis" and sid not in disabled
     ]
 
 

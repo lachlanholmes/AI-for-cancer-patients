@@ -12,3 +12,7 @@ image/issuestofix/
 
 # Local debugging screenshots / dev artifacts (not part of the app)
 *.png
+
+# Eval harness outputs (generated locally)
+evals/results/
+evals/report*.html

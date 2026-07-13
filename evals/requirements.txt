@@ -1,0 +1,2 @@
+# Extra deps for the eval harness only (not needed to run the app).
+markdown>=3.6
