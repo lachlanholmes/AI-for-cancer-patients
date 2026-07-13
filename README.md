@@ -91,4 +91,10 @@ static/
 Licensed under the [Apache License 2.0](LICENSE). Free to use, study, modify, and
 build on — including commercially — provided you keep the license and attribution.
 
-Source code: https://github.com/Roupen92/AI-for-cancer-patients
+## Credits and attribution
+
+A modified fork of [AI for Cancer Patients](https://github.com/Roupen92/AI-for-cancer-patients),
+originally created by **Roupen Odabashian** and licensed under the Apache License 2.0.
+This fork adds deployment tooling and UI changes; see the commit history for details.
+
+Modifications © 2026 Lachlan Holmes. See also the [NOTICE](NOTICE) file.
