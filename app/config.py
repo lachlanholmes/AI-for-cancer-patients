@@ -40,9 +40,11 @@ PROVIDER = _resolve_provider()
 
 # The default model has to match the resolved provider — a Gemini model name sent
 # to OpenAI (or vice versa) fails. An explicit *_MODEL override always wins.
-# NOTE: gemini-2.5-flash is retired for new Google Cloud projects (returns 404
-# "no longer available to new users"); gemini-3.5-flash is the current GA flash.
-_DEFAULT_MODEL = "gpt-5.1" if PROVIDER == "openai" else "gemini-3.5-flash"
+# NOTE: gemini-2.5-flash is retired for new projects (404) and the gemini-3.5-flash
+# tier has returned sustained 503s for some accounts. gemini-flash-lite-latest is a
+# cheap, currently-reliable default; override CANCERPATIENT_MODEL for higher quality
+# (e.g. gemini-3-flash-preview).
+_DEFAULT_MODEL = "gpt-5.1" if PROVIDER == "openai" else "gemini-flash-lite-latest"
 MODEL_NAME = (
     os.getenv("CANCERPATIENT_MODEL")
     or os.getenv("MEDBOARD_MODEL")
