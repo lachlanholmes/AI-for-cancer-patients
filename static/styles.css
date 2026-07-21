@@ -978,8 +978,11 @@ html {
   .appt-cta,
   #cancel-btn,
   #restart-btn,
+  #result-reset-btn,
   .how-it-works,
   #view-form,
+  .feedback-box,
+  .feedback-jump-wrap,
   #view-working {
     display: none !important;
   }
