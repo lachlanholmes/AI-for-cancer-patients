@@ -971,6 +971,7 @@ html {
 
 /* --- Print stylesheet ----------------------------------------------------- */
 
+.print-source { display: none; }
 @media print {
   .topbar,
   .disclaimer-banner,
@@ -985,6 +986,14 @@ html {
   .feedback-jump-wrap,
   #view-working {
     display: none !important;
+  }
+  .print-source {
+    display: block;
+    margin-top: 16px;
+    padding-top: 8px;
+    border-top: 1px solid #ccc;
+    font-size: 9pt;
+    color: #555;
   }
 
   body {
