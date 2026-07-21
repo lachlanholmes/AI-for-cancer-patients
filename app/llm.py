@@ -71,6 +71,30 @@ def _parse_retry_delay(err: Exception) -> float | None:
         return None
 
 
+def _quota_reason(err: Exception) -> str:
+    """Classify a 429 from its message so the logs name the actual cause.
+
+    All three funnel into the same RateLimitError, but the body distinguishes
+    them — a spend cap is a project ceiling (not a lack of credit), a rate limit
+    usually means the free tier, and otherwise it's a generic quota/billing issue.
+    """
+    m = str(err).lower()
+    if "spend" in m:  # "monthly spending cap"
+        return (
+            "Gemini project spend cap reached — raise it at https://ai.studio/spend "
+            "(this is a per-project cap, NOT your credit balance)."
+        )
+    if "rate" in m:
+        return (
+            "Gemini rate limit hit — confirm the key's project has billing enabled "
+            "(the free tier is too tight for this app's fan-out)."
+        )
+    return (
+        "Gemini quota exhausted — check billing/quota at "
+        "https://console.cloud.google.com/billing."
+    )
+
+
 def chat(
     messages: list[dict],
     *,
@@ -119,13 +143,9 @@ def chat(
             attempt += 1
             if attempt >= max_retries:
                 # Raise a clean sentinel so callers can render a user-facing message
-                # instead of the raw JSON blob.
-                raise QuotaExceeded(
-                    "LLM quota exhausted. If you're on Google Gemini, check that "
-                    "billing is enabled on your project at "
-                    "https://console.cloud.google.com/billing — free-tier limits "
-                    "(5 requests/minute) are too tight for this app."
-                ) from e
+                # instead of the raw JSON blob. The message names the specific 429
+                # cause (spend cap / rate limit / quota) so operator logs are actionable.
+                raise QuotaExceeded(_quota_reason(e)) from e
             suggested = _parse_retry_delay(e)
             backoff = max(suggested or 0, min(2**attempt, 30))
             backoff = min(backoff, 60)   # cap at 60s
