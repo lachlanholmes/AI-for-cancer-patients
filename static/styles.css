@@ -325,6 +325,51 @@ main {
   border-radius: var(--radius-lg);
 }
 
+/* Anonymous feedback box at the bottom of the results view. */
+.feedback-box {
+  margin-top: 40px;
+  padding: 24px;
+  background: var(--bg-sunken);
+  border-radius: var(--radius-lg);
+}
+
+.feedback-box h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.feedback-intro {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+
+.feedback-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.feedback-status {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Honeypot: off-screen for humans, still "fillable" for naive bots. */
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
 .how-it-works h2 {
   font-family: var(--font-serif);
   font-weight: 600;

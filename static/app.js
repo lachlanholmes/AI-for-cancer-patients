@@ -201,6 +201,41 @@
     caseInput.focus();
   });
 
+  // Anonymous feedback → POST /api/feedback (server relays to a private GitHub repo).
+  $("#feedback-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msgEl = $("#feedback-message");
+    const statusEl = $("#feedback-status");
+    const msg = msgEl.value.trim();
+    if (msg.length < 2) {
+      statusEl.textContent = "Please write a little more.";
+      msgEl.focus();
+      return;
+    }
+    const btn = $("#feedback-btn");
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    statusEl.textContent = "";
+    try {
+      const r = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, website: $("#fb-website").value }),
+      });
+      if (!r.ok) {
+        const b = await r.json().catch(() => ({}));
+        throw new Error(b.detail || `Server returned ${r.status}`);
+      }
+      msgEl.value = "";
+      statusEl.textContent = "Thank you — your feedback was sent anonymously. 💛";
+    } catch (err) {
+      statusEl.textContent = `Couldn't send: ${err.message || err}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Send feedback";
+    }
+  });
+
   $("#print-btn").addEventListener("click", () => window.print());
 
   $("#copy-btn").addEventListener("click", async () => {

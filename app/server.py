@@ -7,6 +7,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,6 +57,13 @@ class PatientRequest(BaseModel):
 
 class BoardResponse(BaseModel):
     session_id: str
+
+
+class FeedbackRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+    # Honeypot: a hidden field real users leave empty. If a bot fills it, we
+    # silently accept and drop the submission instead of creating an issue.
+    website: str = Field(default="", max_length=200)
 
 
 @app.get("/")
@@ -236,3 +244,58 @@ async def lay_summary(sid: str, label: str) -> dict:
 
     session.lay_summaries[label] = text
     return {"label": label, "lay_summary": text, "cached": False}
+
+
+@app.post("/api/feedback")
+async def submit_feedback(req: FeedbackRequest) -> dict:
+    """Anonymous user feedback → a GitHub issue in a private repo the operator owns.
+
+    Anonymous by design: we deliberately record NO IP address, user agent, or
+    session id — only the message text the user typed. Configure with
+    FEEDBACK_GITHUB_TOKEN (a fine-grained token with Issues:read/write on the
+    repo) and FEEDBACK_GITHUB_REPO ("owner/repo"). If either is unset, feedback
+    is disabled and the endpoint reports that cleanly.
+    """
+    # Honeypot tripped → pretend success, create nothing.
+    if req.website.strip():
+        return {"ok": True}
+
+    token = os.getenv("FEEDBACK_GITHUB_TOKEN")
+    repo = os.getenv("FEEDBACK_GITHUB_REPO")
+    if not token or not repo:
+        raise HTTPException(status_code=503, detail="Feedback isn't set up right now.")
+
+    message = req.message.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="Please write a message first.")
+
+    stamp = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+    first_line = message.splitlines()[0][:60]
+    title = f"[app feedback] {first_line}"
+    body = (
+        f"{message}\n\n"
+        f"---\n"
+        f"Submitted anonymously through the app on {stamp}. "
+        f"No IP, session, or identifying information is collected."
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                f"https://api.github.com/repos/{repo}/issues",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+                json={"title": title, "body": body},
+            )
+    except httpx.HTTPError:
+        log.exception("Feedback delivery failed (network)")
+        raise HTTPException(status_code=502, detail="Couldn't send feedback right now — please try again later.")
+
+    if r.status_code not in (200, 201):
+        log.error("GitHub issue create failed: %s %s", r.status_code, r.text[:300])
+        raise HTTPException(status_code=502, detail="Couldn't send feedback right now — please try again later.")
+
+    return {"ok": True}

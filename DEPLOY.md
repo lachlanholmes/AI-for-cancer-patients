@@ -40,6 +40,7 @@ is strictly required.
 | `CANCERPATIENT_MODEL` | Optional | Override the model. Default `gemini-flash-lite-latest`. Use `gemini-3-flash-preview` for higher quality. (`gemini-2.5-flash` is retired; the `gemini-3.5-flash` tier has had sustained 503s.) |
 | `CANCERPATIENT_PROVIDER` + `OPENAI_API_KEY` | Optional | Switch to OpenAI instead of Gemini. |
 | `NCBI_EMAIL` + `NCBI_API_KEY` | Optional | Raises the PubMed rate limit. |
+| `FEEDBACK_GITHUB_TOKEN` + `FEEDBACK_GITHUB_REPO` | Optional | Enables the anonymous "Send feedback" box on the results page (see below). Both must be set. |
 
 ## Deploy steps
 
@@ -98,6 +99,26 @@ What degrades until you add a Brave key:
 
 When you're ready to pay for Brave, just add the `Brave_API` variable in Railway and
 redeploy — no code change needed.
+
+## Anonymous feedback box (optional)
+
+The results page can show a "Send feedback" box. Submissions are posted as issues in
+a **private GitHub repo you own** — no third-party service, and the app records no IP,
+session, or identifying info (a honeypot field filters naive bots).
+
+Setup:
+
+1. Create a **new private repo** to collect feedback, e.g. `cancer-support-feedback`.
+2. Create a **fine-grained personal access token** (GitHub → Settings → Developer
+   settings → Fine-grained tokens) scoped to **only that repo**, with
+   **Issues: Read and write** permission. Copy the token.
+3. In Railway, set `FEEDBACK_GITHUB_TOKEN` (the token) and `FEEDBACK_GITHUB_REPO`
+   (`your-username/cancer-support-feedback`). Redeploy.
+
+If either variable is unset, the box still appears but reports that feedback isn't
+set up. Note: GitHub does not email you for issues your own token opens — watch the
+repo or use the GitHub mobile app. If you later get spam, you can add a label filter
+or issue automation on that repo.
 
 ## Local development
 
