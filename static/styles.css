@@ -370,6 +370,27 @@ main {
   opacity: 0;
 }
 
+/* Subtle "jump to feedback" link near the appointment CTA. */
+.feedback-jump-wrap {
+  margin: 8px 0 0;
+  text-align: right;
+}
+
+.feedback-jump {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.feedback-jump:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 .how-it-works h2 {
   font-family: var(--font-serif);
   font-weight: 600;
